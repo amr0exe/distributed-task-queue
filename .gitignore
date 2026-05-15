@@ -1,0 +1,88 @@
+# =========================
+# Go build artifacts
+# =========================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+/bin/
+/dist/
+/build/
+
+# Go coverage
+*.cover
+coverage.out
+
+# =========================
+# Go modules cache (local)
+# =========================
+vendor/
+
+# =========================
+# IDE / Editor files
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# =========================
+# OS generated files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# Database files (local dev)
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Docker artifacts (optional local clutter)
+# =========================
+.docker/
+docker/*.tmp
+
+# =========================
+# Test / runtime temp files
+# =========================
+tmp/
+temp/
+*.tmp
+
+# =========================
+# Go workspace (optional)
+# keep if you use go.work, ignore sums if needed
+# =========================
+go.work.sum
+
+# =========================
+# profiling outputs (pprof)
+# =========================
+*.pprof
+
+# =========================
+# Kubernetes / infra (future-proofing)
+# =========================
+*.kubeconfig
