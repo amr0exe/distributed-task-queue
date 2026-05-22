@@ -13,11 +13,11 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    
+
     restart: unless-stopped
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -34,9 +34,9 @@ services:
 
     environment:
       GOOSE_DRIVER: postgres
-      GOOSE_DBSTRING: ${GOOSE_DBSTRING}
+      GOOSE_DBSTRING: ${DBSTRING}
       GOOSE_MIGRATION: /migrations
-    
+
     depends_on:
       database:
         condition: service_healthy

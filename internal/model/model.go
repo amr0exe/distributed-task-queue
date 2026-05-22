@@ -8,3 +8,8 @@ type Task struct {
 	IsCompleted bool      `json:"is_completed"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+type UpdateTaskInput struct {
+	Title       string    `json:"title"`
+	IsCompleted bool      `json:"is_completed"`
+}

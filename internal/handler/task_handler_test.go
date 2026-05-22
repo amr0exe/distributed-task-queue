@@ -2,18 +2,33 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/joho/godotenv"
+	"tryit.me/internal/app"
+	"tryit.me/internal/repository"
 	"tryit.me/internal/service"
-	"tryit.me/internal/store"
 )
 
 func setup() *service.TaskService {
-	st := store.NewMemoryStore()
-	return service.NewTaskService(st)
+	_ = godotenv.Load("../../.env")
+	dbStr, ok := os.LookupEnv("TEST_DBSTRING")
+	if !ok {
+		log.Fatalf("testing db string not found")
+	}
+
+	a, err := app.New(app.Config{DBString: dbStr})
+	if err != nil {
+		log.Fatalf("failed initializing app: %v", err.Error())
+	}
+
+	repo := repository.NewTaskRepository(a.DB())
+	return service.NewTaskService(repo)
 }
 
 func TestCreateTask(t *testing.T) {

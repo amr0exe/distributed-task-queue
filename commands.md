@@ -1,4 +1,23 @@
-# Requests
+# Helper Commands
+
+``` bash
+docker compose up -d
+```
+
+``` bash
+docker compose run --rm goose goose up
+docker compose run --rm goose goose down
+```
+
+``` bash
+# fish shell
+set -x DBSTRING "postgres://tskQ:password@localhost:5432/tsk_db?sslmode=disable"
+
+#bash shell
+export DBSTRING="postgres://tskQ:password@localhost:5432/tsk_db?sslmode=disable"
+```
+
+## Requests
 
 ## Create Task
 
