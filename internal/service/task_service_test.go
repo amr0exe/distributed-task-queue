@@ -1,34 +1,74 @@
 package service
 
 import (
+	"context"
+	"log"
+	"os"
+	"strconv"
 	"testing"
 
+	"github.com/joho/godotenv"
+	"tryit.me/internal/app"
 	"tryit.me/internal/model"
-	"tryit.me/internal/store"
+	"tryit.me/internal/repository"
 )
 
 func setup() *TaskService {
-	st := store.NewMemoryStore()
-	return NewTaskService(st)
+	_ = godotenv.Load("../../.env")
+	dbStr, ok := os.LookupEnv("TEST_DBSTRING")
+	if !ok {
+		log.Fatalf("testing db string not found")
+	}
+
+	a, err := app.New(app.Config{DBString: dbStr})
+	if err != nil {
+		log.Fatalf("failed initializing app: %v", err.Error())
+	}
+
+	repo := repository.NewTaskRepository(a.DB())
+	return NewTaskService(repo)
+}
+
+func IdConversion(id string, t *testing.T) int {
+	rId, err := strconv.Atoi(id)
+	if err != nil {
+		t.Fatalf("expected numeric id got: %v", err)
+		return 0
+	}
+	return rId
 }
 
 func TestCreateTask(t *testing.T) {
 	taskService := setup()
 
-	got, err := taskService.CreateTask("task checker")
+	// acquire
+	got, err := taskService.CreateTask(context.Background(), "task checker")
 	if err != nil {
 		t.Fatalf("expected task creation to succeed: %v", err)
 	}
+	rID, err := strconv.Atoi(got.ID)
+	if err != nil {
+		t.Fatalf("expected valid numeric ID: %v", err)
+	}
+
+	// release
+	t.Cleanup(func() {
+		_, err := taskService.DeleteTask(context.Background(), rID)
+		if err != nil {
+			t.Errorf("cleanup failed deleting task %d: %v", rID, err)
+		}
+	})
 
 	if got.Title != "task checker" {
 		t.Fatalf("expected title 'task checker', got '%s'", got.Title)
 	}
+
 }
 
 func TestCreateTask_Without_Title(t *testing.T) {
 	taskService := setup()
 
-	_, createErr := taskService.CreateTask("")
+	_, createErr := taskService.CreateTask(context.Background(), "")
 	if createErr == nil {
 		t.Fatal("expected error on empty or missing title")
 	}
@@ -37,28 +77,54 @@ func TestCreateTask_Without_Title(t *testing.T) {
 func TestGetAll(t *testing.T) {
 	taskService := setup()
 
-	_, _ = taskService.CreateTask("task1")
-	_, _ = taskService.CreateTask("task2")
+	ftsk, _ := taskService.CreateTask(context.Background(), "task1")
+	stsk, _ := taskService.CreateTask(context.Background(), "task2")
 
-	got, err := taskService.GetAll()
+	fID := IdConversion(ftsk.ID, t)
+	sId := IdConversion(stsk.ID, t)
+
+	t.Cleanup(func() {
+		delete := func(id int) {
+			if _, err := taskService.DeleteTask(context.Background(), id); err != nil {
+				t.Errorf("cleanup failed deleting task %d: %v", id, err)
+			}
+		}
+
+		delete(fID)
+		delete(sId)
+	})
+
+	got, err := taskService.GetAll(context.Background())
 	if err != nil {
-		t.Fatalf("expected to be fetched: %v", err)
+		t.Fatalf("expected fetched for task to succed: %v", err)
 	}
 
-	if len(got) != 2 {
-		t.Fatalf("got %d tasks, expected 2", len(got))
+	if len(got) < 2 {
+		t.Fatalf("got %d tasks, expected >= 2", len(got))
 	}
 }
 
 func TestGetTask(t *testing.T) {
 	taskService := setup()
 
-	task, err := taskService.CreateTask("checkOne")
+	task, err := taskService.CreateTask(context.Background(), "checkOne")
 	if err != nil {
 		t.Fatalf("expected task creation to succeed: %v", err)
 	}
 
-	got, err := taskService.GetTask(task.ID)
+	id, err := strconv.Atoi(task.ID)
+	if err != nil {
+		t.Fatalf("expeted valid format ID %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, err := taskService.DeleteTask(context.Background(), id)
+		if err != nil {
+			t.Errorf("cleanup failed on deleting task %d: %v", id, err)
+		}
+	})
+
+	got, err := taskService.GetTask(context.Background(), id)
 	if err != nil {
 		t.Fatalf("expected task to exist at the least: %v", err)
 	}
@@ -75,7 +141,7 @@ func TestGetTask(t *testing.T) {
 func TestGetTask_WithoutID(t *testing.T) {
 	taskService := setup()
 
-	_, err := taskService.GetTask("hahah")
+	_, err := taskService.GetTask(context.Background(), 0)
 	if err == nil {
 		t.Fatal("expected error for missing task")
 	}
@@ -84,12 +150,17 @@ func TestGetTask_WithoutID(t *testing.T) {
 func TestDeleteTask(t *testing.T) {
 	taskService := setup()
 
-	task, err := taskService.CreateTask("Checkers")
+	task, err := taskService.CreateTask(context.Background(), "Checkers")
 	if err != nil {
 		t.Fatalf("expected task creation to succeed: %v", err)
 	}
 
-	got, err := taskService.DeleteTask(task.ID)
+	id, err := strconv.Atoi(task.ID)
+	if err != nil {
+		t.Fatalf("expected valid ID format: %v", err.Error())
+	}
+
+	got, err := taskService.DeleteTask(context.Background(), id)
 	if err != nil {
 		t.Fatalf("expected task deletion to succeed: %v", err)
 	}
@@ -102,7 +173,7 @@ func TestDeleteTask(t *testing.T) {
 func TestDeleteTask_WithoutID(t *testing.T) {
 	taskService := setup()
 
-	_, err := taskService.DeleteTask("wrong_it_is")
+	_, err := taskService.DeleteTask(context.Background(), 0)
 	if err == nil {
 		t.Fatal("expected error for missing task ID")
 	}
@@ -111,18 +182,29 @@ func TestDeleteTask_WithoutID(t *testing.T) {
 func TestUpdateTask(t *testing.T) {
 	taskService := setup()
 
-	task, err := taskService.CreateTask("Hella Chao")
+	task, err := taskService.CreateTask(context.Background(), "Hella Chao")
 	if err != nil {
 		t.Fatalf("expected task creation to succeed: %v", err)
 	}
 
-	updated_task := model.Task{
-		ID:          "33",
+	id, err := strconv.Atoi(task.ID)
+	if err != nil {
+		t.Fatalf("expecte valid format ID: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, err := taskService.DeleteTask(context.Background(), id)
+		if err != nil {
+			t.Errorf("cleanup failed for taskID %d: %v", id, err)
+		}
+	})
+
+	updated_task := model.UpdateTaskInput{
 		IsCompleted: true,
 		Title:       "Hella",
 	}
 
-	got, err := taskService.UpdateTask(task.ID, updated_task)
+	got, err := taskService.UpdateTask(context.Background(), id, updated_task)
 	if err != nil {
 		t.Fatal("expected task updated to succeed")
 	}
@@ -139,16 +221,16 @@ func TestUpdateTask(t *testing.T) {
 func TestUpdateTask_Without_ID_Task(t *testing.T) {
 	taskService := setup()
 
-	task := model.Task{
+	task := model.UpdateTaskInput{
 		Title: "check this",
 	}
 
-	_, err := taskService.UpdateTask("", task)
+	_, err := taskService.UpdateTask(context.Background(), 0, task)
 	if err == nil {
 		t.Fatal("expected error on missing id")
 	}
 
-	_, taskErr := taskService.UpdateTask("", model.Task{})
+	_, taskErr := taskService.UpdateTask(context.Background(), 0, model.UpdateTaskInput{})
 	if taskErr == nil {
 		t.Fatal("expected error on missing task and id")
 	}

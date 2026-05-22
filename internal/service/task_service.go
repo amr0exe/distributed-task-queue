@@ -3,83 +3,80 @@ package service
 // services will be responsible for interacting with DB/IN-MeM
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"tryit.me/internal/model"
-	"tryit.me/internal/store"
+	"tryit.me/internal/repository"
 )
 
 type TaskService struct {
-	// in-memory instance to share between services
-	store *store.MemoryStore
+	db *repository.TaskRepository
 }
 
-func NewTaskService(store *store.MemoryStore) *TaskService {
+func NewTaskService(db *repository.TaskRepository) *TaskService {
 	return &TaskService{
-		store: store,
+		db: db,
 	}
 }
 
-func (s *TaskService) CreateTask(title string) (model.Task, error) {
+func (s *TaskService) CreateTask(ctx context.Context, title string) (model.Task, error) {
 	if title == "" {
 		return model.Task{}, errors.New("title cannot be empty")
 	}
 
-	task := model.Task{
-		ID:          uuid.NewString(),
-		Title:       title,
-		IsCompleted: false,
-		CreatedAt:   time.Now(),
+	rTsk, err := s.db.CreateTask(ctx, title)
+	if err != nil {
+		return model.Task{}, fmt.Errorf("CreateTask failed: %w", err)
 	}
+	fmt.Printf("Task Creation successfull. %s \n", rTsk.Title)
 
-	s.store.Create(task)
-	fmt.Printf("Task Creation successfull. %s \n", task.Title)
-
-	return task, nil
+	return rTsk, nil
 }
 
-func (s *TaskService) GetAll() ([]model.Task, error) {
-	tasks, _ := s.store.List()
+func (s *TaskService) GetAll(ctx context.Context) ([]model.Task, error) {
+	tasks, err := s.db.ListTasks(ctx)
+	if err != nil {
+		return []model.Task{}, fmt.Errorf("GetAll failed: %w", err)
+	}
 	return tasks, nil
 }
 
-func (s *TaskService) GetTask(id string) (model.Task, error) {
-	if id == "" {
+func (s *TaskService) GetTask(ctx context.Context, id int) (model.Task, error) {
+	if id == 0 {
 		return model.Task{}, errors.New("ID cannot be empty")
 	}
 
-	task, ok := s.store.Get(id)
-	if !ok {
-		return model.Task{}, fmt.Errorf("Failed fetching for taskID: %s", id)
+	task, err := s.db.GetTask(ctx, id)
+	if err != nil {
+		return model.Task{}, fmt.Errorf("Failed fetching for taskID: %d", id)
 	}
 
 	return task, nil
 }
 
-func (s *TaskService) DeleteTask(id string) (model.Task, error) {
-	if id == "" {
+func (s *TaskService) DeleteTask(ctx context.Context, id int) (model.Task, error) {
+	if id == 0 {
 		return model.Task{}, errors.New("ID cannot be empty")
 	}
 
-	task, ok := s.store.Delete(id)
-	if !ok {
-		return model.Task{}, fmt.Errorf("Failed deleting task with taskID: %s", id)
+	task, err := s.db.DeleteTask(ctx, id)
+	if err != nil {
+		return model.Task{}, fmt.Errorf("Failed deleting task with taskID: %d", id)
 	}
 
 	return task, nil
 }
 
-func (s *TaskService) UpdateTask(id string, updatedTask model.Task) (model.Task, error) {
-	if id == "" {
+func (s *TaskService) UpdateTask(ctx context.Context, id int, updatedTask model.UpdateTaskInput) (model.Task, error) {
+	if id == 0 {
 		return model.Task{}, errors.New("ID cannot be empty")
 	}
 
-	task, ok := s.store.Update(id, updatedTask)
-	if !ok {
-		return model.Task{}, fmt.Errorf("Failed updating task with taskID: %s", id)
+	task, err := s.db.UpdateTask(ctx, id, updatedTask)
+	if err != nil {
+		return model.Task{}, fmt.Errorf("Failed updating task with taskID: %d", id)
 	}
 
 	return task, nil
